@@ -2,7 +2,7 @@
 
 一个适合在 OpenAI Codex 中运行的完整剪纸 / 编辑拼贴广告制作 skill。从创意、脚本、分镜和关键帧开始，继续完成动画、旁白、音乐、音效、合成与 MP4 质检。
 
-> Codex edition: `1.0.1`
+> Codex edition: `1.1.0`
 >
 > Skill name: `paper-collage-ad`
 >
@@ -40,6 +40,7 @@ Codex 会读取根目录的 `SKILL.md`，并按需调用 `references/`、`exampl
 - 从产品资料提炼一个贯穿全片的视觉隐喻。
 - 输出等待确认的脚本、对白和时间码分镜。
 - 使用真实品牌资产生成风格锁定的剪纸关键帧。
+- 在关键帧与最终动画之间，用 ChatCut 的 Gemini Omni 快速预演动作或局部修改已有短片。
 - 使用 Seedance、HyperFrames、分层 PNG 或 FFmpeg 完成动画。
 - 使用普通 TTS，或在本地通过 IndexTTS-2 MLX 克隆已获授权的声音。
 - 添加音乐、纸张拟音和动作音效，最后输出经过流级验证的 H.264/AAC MP4。
@@ -53,7 +54,16 @@ brew install ffmpeg node
 bash scripts/check-deps.sh
 ```
 
-只使用静态关键帧、分层动画和最终合成时，不需要任何 API Key。Seedance、即梦、MiniMax 和 ElevenLabs 属于可选通道，各自需要用户自己的服务权限。
+只使用静态关键帧、分层动画和最终合成时，不需要任何 API Key。Gemini Omni 通过可选的 ChatCut 插件调用，需要登录并拥有视频生成额度；Seedance、即梦、MiniMax 和 ElevenLabs 也分别需要使用者自己的服务权限。
+
+## Gemini Omni 中间环节
+
+这一版加入 Gemini Omni（ChatCut 工具参数 `model: "omni"`，后台模型 `gemini-omni-flash-preview`）。它不是最终精修模型，主要用于：
+
+- 用已确认关键帧做 3–10 秒动作预演，先判断节奏和笑点是否成立。
+- 用 `continueFrom` 对现有短片做一次局部修改，未提及的内容尽量保持不变。
+
+Omni 固定输出 720p/24fps，只支持 16:9 或 9:16，也不适合生成精确中文文字。最终需要 1080p、长镜头、精确 Logo/UI/中文时，使用 Seedance、Kling 或 HyperFrames 完成。完整用法和路由判断见 [references/gemini-omni-flash.md](references/gemini-omni-flash.md)。
 
 ## 声音克隆：IndexTTS-2 MLX
 

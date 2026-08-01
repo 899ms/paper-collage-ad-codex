@@ -23,6 +23,7 @@
   → 用户确认脚本
   → 锁定第一张剪纸风格图
   → 生成全部关键帧
+  → 可选：用 Gemini Omni 预演动作 / 局部修补
   → 逐场景制作动画
   → 生成并选择旁白
   → 根据旁白锁定镜头时长
@@ -86,7 +87,7 @@ bash "$SKILL_DIR/scripts/check-deps.sh"
 
 ```bash
 mkdir -p "$PROJECT"/{manifests,renders}
-mkdir -p "$PROJECT/assets"/{brand,screenshots,keyframes,layers,voice-reference,voice-model,voice-raw,voice-final,audio,sfx,music}
+mkdir -p "$PROJECT/assets"/{brand,screenshots,keyframes,layers,omni-drafts,voice-reference,voice-model,voice-raw,voice-final,audio,sfx,music}
 test -e "$PROJECT/.gitignore" || \
   cp "$SKILL_DIR/examples/project.gitignore" "$PROJECT/.gitignore"
 ```
@@ -108,6 +109,7 @@ test -e "$PROJECT/.gitignore" || \
     screenshots/
     keyframes/
     layers/
+    omni-drafts/
     voice-reference/
     voice-model/
     voice-raw/
@@ -131,7 +133,7 @@ test -e "$PROJECT/.gitignore" || \
 - 真实 Logo、应用图标、界面截图、字体和品牌色。
 - 横版 `16:9`、竖版 `9:16` 或其他比例。
 - 语言、目标时长和发布渠道。
-- 是否可以使用 Seedance、其他视频 API 或只做本地动画。
+- 是否可以使用 ChatCut Gemini Omni、Seedance、其他视频 API 或只做本地动画。
 - 是否使用真人录音、普通 TTS 或授权声音克隆。
 
 把结论写进 `<project>/brief.md`。不得让图像模型凭空创造 Logo、产品界面或功能事实。
@@ -269,6 +271,45 @@ cp "$SKILL_DIR/examples/prompts.json" "$PROJECT/manifests/prompts.json"
 
 生成全部关键帧后制作联系表，一次检查人物、纸张、阴影、品牌色和构图连续性。
 
+## 6.5 Gemini Omni 中间预演与局部修补（可选）
+
+如果 Codex 已安装并登录 ChatCut，而且账号具有视频生成额度，可以在关键帧确认后、最终动画前插入 Gemini Omni。ChatCut 中使用 `model: "omni"`，后台模型是 `gemini-omni-flash-preview`。
+
+这个阶段只解决两类问题：
+
+1. 把一张已确认关键帧作为 `firstFrame`，快速测试动作顺序、停顿和笑点。
+2. 把一段不超过 10 秒的已有视频作为 `continueFrom`，只修改一个局部属性。
+
+先复制计划模板：
+
+```bash
+cp "$SKILL_DIR/examples/omni-pass.json" "$PROJECT/manifests/omni-pass.json"
+```
+
+导入关键帧或源视频到 ChatCut 项目，取得项目资源 ID，再按 `references/gemini-omni-flash.md` 调用视频生成工具。最小的动作预演参数为：
+
+```js
+submit_video({
+  model: "omni",
+  prompt: "[0-3s] Locked-off static camera. Three cut-paper cards slide in one by one with restrained stop-motion bounce. [3-5s] Hold the finished composition. Preserve the paper grain, halftone dots, cut edges and shadows.",
+  firstFrame: "<image-asset-id>",
+  durationSeconds: 5,
+  ratio: "16:9",
+  name: "Scene 01 - Omni motion draft"
+})
+```
+
+Omni 的硬限制：
+
+- 固定 720p/24fps；不要传 `resolution`。
+- 只支持 16:9 或 9:16，时长目标为 3–10 秒。
+- `firstFrame`、`refImages`、`continueFrom` 三选一，不能混用。
+- 不支持结尾帧、首尾插值、延长、桥接、视频/音频参考或修改对白。
+- 中文和其他 CJK 字形不可靠，精确文字、网址、UI、Logo 放到 HyperFrames 或后期叠加。
+- 提示词用英文和正面描述，主要追踪对象不超过三个。
+
+审核通过的 720p 草稿可以在分辨率要求不高时直接进入剪辑；需要 1080p 或更强质感时，把它作为动作参考，再用 Seedance/Kling 精修，或用 HyperFrames 精确复刻动作。局部修改到第四轮时停止继续叠加，回到干净源素材重新生成，避免质量连续下降和重复付费。
+
 ## 7. 选择动画路线
 
 每个场景单独输出 MP4。这样后面可以独立调整节奏，而不必全片重新生成。
@@ -356,6 +397,7 @@ node "$SKILL_DIR/scripts/render.mjs" \
 
 ### 推荐混合方案
 
+- 快速动作预演、已有短片的单点修改：Gemini Omni。
 - 自然、混乱和物理动作：Seedance。
 - Logo、UI、网址和精确文字：HyperFrames。
 - 简单纸片进场：本地分层动画。
@@ -666,18 +708,21 @@ bash "$SKILL_DIR/scripts/check-deps.sh"
 
 # 3. 建立项目
 mkdir -p "$PROJECT"/{manifests,renders}
-mkdir -p "$PROJECT/assets"/{brand,screenshots,keyframes,layers,voice-reference,voice-model,voice-final,music,sfx,audio}
+mkdir -p "$PROJECT/assets"/{brand,screenshots,keyframes,layers,omni-drafts,voice-reference,voice-model,voice-final,music,sfx,audio}
 
 # 4. 在 Codex 中要求先完成并确认 brief、script、storyboard
 
 # 5. 生成并确认关键帧，逐场输出到 assets/keyframes/
 
-# 6. 使用 Seedance、HyperFrames、分层动画或静态兜底生成 scene MP4
+# 6. 可选：用 Gemini Omni 预演动作或局部修补短片
+cp "$SKILL_DIR/examples/omni-pass.json" "$PROJECT/manifests/omni-pass.json"
 
-# 7. 可选：首次安装本地克隆 TTS
+# 7. 使用 Seedance、Kling、HyperFrames、分层动画或静态兜底生成 scene MP4
+
+# 8. 可选：首次安装本地克隆 TTS
 bash "$SKILL_DIR/scripts/setup-indextts2-mlx.sh"
 
-# 8. 可选：使用者放入已授权的 reference.wav 后生成声纹与旁白
+# 9. 可选：使用者放入已授权的 reference.wav 后生成声纹与旁白
 bash "$SKILL_DIR/scripts/prepare-indextts2-voice.sh" \
   "$PROJECT/assets/voice-reference/reference.wav" \
   "$PROJECT/assets/voice-model/speaker-v2.npz" \
@@ -685,13 +730,13 @@ bash "$SKILL_DIR/scripts/prepare-indextts2-voice.sh" \
 cp "$SKILL_DIR/examples/voice-manifest.indextts2.json" "$PROJECT/manifests/voice.indextts2.json"
 node "$SKILL_DIR/scripts/narrate-indextts2.mjs" --manifest "$PROJECT/manifests/voice.indextts2.json"
 
-# 9. 配置生产清单并合成
+# 10. 配置生产清单并合成
 cp "$SKILL_DIR/examples/production-manifest.json" "$PROJECT/manifests/production-manifest.json"
 node "$SKILL_DIR/scripts/assemble.mjs" \
   --manifest "$PROJECT/manifests/production-manifest.json" \
   --output "$PROJECT/renders/final.mp4"
 
-# 10. 检查最终文件
+# 11. 检查最终文件
 ffprobe -v error -show_streams -show_format "$PROJECT/renders/final.mp4"
 ```
 

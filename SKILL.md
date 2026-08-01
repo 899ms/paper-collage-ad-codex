@@ -1,8 +1,9 @@
 ---
 name: paper-collage-ad
 description: This skill should be used when the user asks to "做一个剪纸广告", "制作拼贴广告片", "把产品做成纸片定格动画", "做一个有趣的产品广告", "生成半色调剪纸分镜", "把静态拼贴图做成广告视频", "把广告拉长一点", "参考这个声音配音", or wants a complete branded paper-cut advertisement from brief to validated MP4 rather than only prompts or still images.
-version: 1.0.1
-compatibility: OpenAI Codex desktop and CLI
+metadata:
+  version: "1.1.0"
+  compatibility: OpenAI Codex desktop and CLI
 ---
 
 # Paper Collage Ad
@@ -52,7 +53,7 @@ The four deterministic, runnable steps — each fails loudly if inputs are missi
 | Reference-voice narration | `node <SKILL_DIR>/scripts/narrate-indextts2.mjs` | private speaker `.npz` + `examples/voice-manifest.indextts2.json` | one local 48 kHz WAV per scene |
 | Final assembly | `node <SKILL_DIR>/scripts/assemble.mjs` | scene MP4s + voice + music + sfx + `examples/production-manifest.json` | mastered `final.mp4` |
 
-Two steps keep a model or human in the loop: image keyframe generation (Phase 3) and voice generation (Phase 5). Everything else is a script. Follow Phases 1–6 in order; do not skip the stage gates in `references/production-workflow.md`.
+Creative generation keeps a model or human in the loop for keyframes, the optional Gemini Omni motion pass, final animation and voice selection. Deterministic assembly and validation remain scripted. Follow Phases 1–6 in order; do not skip the stage gates in `references/production-workflow.md`.
 
 ## Phase 1: Lock the brief
 
@@ -122,6 +123,21 @@ Repeat the complete material description in every generation prompt. Generators 
 
 Use the prompt scaffold in `references/prompt-patterns.md`. Burn short scene labels into the image only when the generator reliably preserves them. Keep exact text brief and inspect every result for malformed Chinese, incorrect URLs and invented format labels.
 
+## Phase 3.5: Gemini Omni motion draft and surgical edit pass (optional)
+
+When the ChatCut plugin is installed and the user has video-generation entitlement, use **Gemini Omni** (`model: "omni"`, backend `gemini-omni-flash-preview`) between approved keyframes and final animation. Read `references/gemini-omni-flash.md` and copy `examples/omni-pass.json` as the shot plan.
+
+Use this pass for two jobs only:
+
+1. **Motion drafting:** animate an approved keyframe with `firstFrame` to test timing, staging and comic beats before spending on a finishing generation.
+2. **Surgical repair:** pass an existing clip through `continueFrom` to change one localized property while preserving unmentioned content.
+
+Treat Omni as an editing and drafting layer, not a finishing model. It outputs 720p/24fps, supports 3–10 second clips, and only accepts 16:9 or 9:16. Pick exactly one of `firstFrame`, `refImages` or `continueFrom`; omit `resolution`. It cannot use a last frame, extend a clip, bridge two clips, accept audio references or replace spoken audio.
+
+Write the motion prompt in English, use positive instructions such as `locked-off static camera`, and track no more than three important subjects. Do not ask Omni to render Chinese or other CJK text. Add exact labels, URLs, UI and wordmarks later with HyperFrames or another deterministic overlay.
+
+Approve or reject each Omni draft before final animation. If 720p is acceptable, an approved output may become the scene source. If delivery requires 1080p, longer duration, exact typography, or whole-shot motion/camera changes, use the Omni clip only as a motion reference and finish with Seedance 2, Kling or HyperFrames. Stop deep edit chains: from round four onward, regenerate from a clean source because quality loss and full regeneration cost compound.
+
 ## Phase 4: Animate
 
 **Route A — AI image-to-video (Seedance / jimeng via `arkcli`), best for organic motion + native foley.** Prefer real element assembly when a capable image-to-video tool is available:
@@ -138,7 +154,7 @@ Use one video model for the delivered set to preserve motion and texture consist
 
 The non-negotiable rule for paper-cut in HyperFrames: **animate real paper assets, never fake paper in CSS.** Feed AI-generated cut-paper PNGs (background field + cut-out element layers) and choreograph *those* with GSAP; a flat CSS/gradient look is the "flat vector pretending to be paper" trap. The precise-logo trick: two stacked copies of the paper-cut icon — the outer one clipped to a circle and rotated, a static inner copy clipped to the center circle locking the ear in place. Bonus: all text is real HTML, so wordmarks and URLs never mis-spell (unlike AI-rendered text).
 
-**Hybrid is ideal:** organic/physical scenes (files raining, chaos, natural motion + native foley) → an AI model (Seedance); precise brand/UI/logo/text scenes → HyperFrames. Anyone without a video-model key can do the whole film in HyperFrames.
+**Hybrid is ideal:** cheap motion experiments or localized short-clip repairs → Gemini Omni; organic/physical finishing scenes (files raining, chaos, natural motion + native foley) → Seedance or Kling; precise brand/UI/logo/text scenes → HyperFrames. Anyone without a video-model key can skip Omni and do the whole film in HyperFrames.
 
 When neither is available, render the approved keyframes with the deterministic FFmpeg fallback in `scripts/render.mjs`. Use short camera movement in the first part of each shot, transition at the scene boundary, and hold the back half for reading. Do not use perpetual breathing, random drift or rapid template transitions.
 
@@ -215,6 +231,7 @@ Treat a valid container as insufficient. A playable MP4 can still have a truncat
 - **You cannot hear audio — the user's ear is the judge.** Never blind-pick a voice, music bed, or mix. Generate 2–4 candidates (voices A/B/C, a couple of tracks) and let the user choose; then tune levels by their feedback. Voiceover, sound effects and music quality are all decided by the user, not by you.
 - **One visual language, all the way through — including on-screen content.** If the film is pure paper-cut, then the content shown *inside a screen* must also be paper-cut/halftone. A realistic photo or a glossy app icon dropped into a paper-cut world clashs and looks worse once animated.
 - **Sound effects: describe them in the video prompt.** Seedance's `--generate-audio` synthesizes foley from the sounds you name in the prompt (paper rustle, shutter click, notification dings, ambience). Write the motion AND the sound into every clip prompt.
+- **Use Gemini Omni for convergence, not final polish.** With ChatCut, `model: "omni"` is the fast 720p drafting route and `continueFrom` is the default for one localized change. Keep its prompt in English, never put exact CJK text in the generated frame, and move to a finishing route instead of stacking four or more edits.
 - **Know the model's limits and be honest.** A video model cannot reliably do precise part-level constraints (e.g. "rotate only the outer shutter blades while the ear stays perfectly still" — it morphs the whole logo). Don't force it. Do exact logo/UI/text motion in the **HyperFrames route** (`references/hyperframes-route.md`): stack two copies of the paper-cut icon, rotate the outer one clipped to a circle, keep a static inner copy clipped to the center to lock the ear. Deterministic, and the text stays real HTML (never mis-spelled).
 - **Proxy / env (behind Clash/TUN):** node's `fetch` needs `HTTPS_PROXY=http://127.0.0.1:7890` for foreign APIs. Do NOT use `set -a; source .env` before node calls — it pollutes the env and makes fetch time out through the TUN fake-IP; inject only the needed keys inline in a clean env.
 
@@ -244,11 +261,13 @@ Treat a valid container as insufficient. A playable MP4 can still have a truncat
 - `references/music-scoring.md`: scene cue maps, suitable instrumentation, sourcing, candidate analysis and sidechain ducking.
 - `references/production-workflow.md`: project layout, stage gates, duration strategy and handoff checklist.
 - `references/hyperframes-route.md`: key-free, deterministic animation via HyperFrames (HTML+GSAP) — the precise-logo trick, the "animate real paper" rule, install and render commands.
+- `references/gemini-omni-flash.md`: optional ChatCut Gemini Omni motion-draft and localized-edit stage, with routing rules and hard limits.
 - `examples/storyboard.json`: scene-by-scene story template (role, idea, action, joke, label, draft duration).
 - `examples/prompts.json`: style-anchor and continuity keyframe prompt manifest template.
 - `examples/render-manifest.json`: still-keyframe render manifest template.
 - `examples/layer-manifest.json`: layered local-animation manifest template.
 - `examples/hyperframes-logo-composition.html`: HyperFrames starter — paper-cut icon two-layer shutter rotation (ear locked), real-HTML two-colour URL, GSAP text bounce.
+- `examples/omni-pass.json`: copyable Gemini Omni first-frame draft and `continueFrom` localized-edit plans.
 - `examples/production-manifest.json`: scene-video, narration, music and sound-effect assembly template.
 - `examples/voice-manifest.indextts2.json`: local IndexTTS-2 scene narration template.
 - `examples/project.gitignore`: privacy-safe ignore rules for user voice, audio and rendered project assets.

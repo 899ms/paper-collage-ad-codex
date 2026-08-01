@@ -39,3 +39,9 @@ On non-macOS hosts, supply your own TTS and drop the resulting WAVs into `assets
 ## Optional generation tools
 
 Image keyframes and music are produced by whatever generator the host agent has (nano-banana-2 / Nano Banana Pro, a music model, etc.). These are not shell dependencies of this skill; the scripts only consume the finished assets you place in the project directory.
+
+### Gemini Omni through ChatCut (optional)
+
+The Phase 3.5 motion-draft and localized-edit pass requires the ChatCut plugin, a signed-in ChatCut account and video-generation entitlement. It does not require a direct Gemini API key inside this repository. Codex calls ChatCut's video generation tool with `model: "omni"`; ChatCut exposes the backend model `gemini-omni-flash-preview`.
+
+If ChatCut or its entitlement is unavailable, skip Phase 3.5. The rest of the workflow remains usable through Seedance, HyperFrames, local layered animation or the FFmpeg fallback. Never store a ChatCut credential, session token or generated private asset in the skill repository.
